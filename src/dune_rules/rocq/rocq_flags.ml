@@ -18,6 +18,7 @@ type t =
   ; rocqdoc_flags : string list
   ; rocqdoc_header : Path.t option
   ; rocqdoc_footer : Path.t option
+  ; wrapper : Path.t option
   }
 
 let default =
@@ -26,10 +27,19 @@ let default =
   ; rocqdoc_flags = [ "--toc" ]
   ; rocqdoc_header = None
   ; rocqdoc_footer = None
+  ; wrapper = None
   }
 ;;
 
-let dump ~dir { rocq_flags; rocqdep_flags; rocqdoc_flags; rocqdoc_header; rocqdoc_footer }
+let dump
+      ~dir
+      { rocq_flags
+      ; rocqdep_flags
+      ; rocqdoc_flags
+      ; rocqdoc_header
+      ; rocqdoc_footer
+      ; wrapper
+      }
   =
   List.map
     ~f:Dune_lang.Encoder.(pair string (list string))
@@ -39,5 +49,8 @@ let dump ~dir { rocq_flags; rocqdep_flags; rocqdoc_flags; rocqdoc_header; rocqdo
     ]
   @ List.map
       ~f:Dune_lang.Encoder.(pair string (option (Dune_lang.Path.Local.encode ~dir)))
-      [ "rocqdoc_header", rocqdoc_header; "rocqdoc_footer", rocqdoc_footer ]
+      [ "rocqdoc_header", rocqdoc_header
+      ; "rocqdoc_footer", rocqdoc_footer
+      ; "wrapper", wrapper
+      ]
 ;;

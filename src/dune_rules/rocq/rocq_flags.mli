@@ -18,6 +18,7 @@ type t =
   ; rocqdoc_flags : string list
   ; rocqdoc_header : Path.t option
   ; rocqdoc_footer : Path.t option
+  ; wrapper : Path.t option
   }
 
 val default : t

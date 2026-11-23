@@ -976,6 +976,14 @@ with the following values for ``<rocq_fields>``:
 - ``(rocqdoc_footer <file>)``: The default HTML footer passed to ``rocq doc``
   via the ``--with-footer`` flag. Values set here become the ``:standard``
   value in the ``(rocq.theory (rocqdoc_footer <file>))`` field.
+- ``(wrapper <program>)`` runs Rocq build commands through ``<program>``. The
+  first argument passed to the wrapper is the path to the actual ``rocq``
+  executable, followed by the arguments that would normally be passed to
+  ``rocq``. Queries that Dune uses to determine the Rocq version and
+  configuration bypass the wrapper.
+
+  .. versionadded:: 3.26
+
 - ``(timing <blang expression>)`` controls whether ``rocq compile`` writes
   per-command timing information for ``foo.v`` to ``foo.v.timing``, using
   ``-time-file``. The default is ``false``.

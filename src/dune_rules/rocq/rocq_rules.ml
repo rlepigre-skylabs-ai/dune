@@ -117,18 +117,46 @@ let rocq_env =
         and+ rocqdoc_footer =
           expand_path (Rocq_env.rocqdoc_footer config.rocq) ~get:(fun x ->
             x.rocqdoc_footer)
+        and+ wrapper =
+          expand_path (Rocq_env.wrapper config.rocq) ~get:(fun x -> x.wrapper)
         in
         { Rocq_flags.rocq_flags
         ; rocqdep_flags
         ; rocqdoc_flags
         ; rocqdoc_header
         ; rocqdoc_footer
+        ; wrapper
         })
   in
   fun ~dir ->
     (let* () = Memo.return () in
      (Staged.unstage f) dir)
     |> Action_builder.of_memo_join
+;;
+
+let rocq_command ~dir rocq =
+  let wrapper =
+    Action_builder.map (rocq_env ~dir) ~f:(fun flags -> flags.Rocq_flags.wrapper)
+    |> Action_builder.memoize ~cutoff:(Option.equal Path.equal) "rocq command wrapper"
+  in
+  let program =
+    Action_builder.map wrapper ~f:(function
+      | None -> rocq
+      | Some wrapper -> Ok wrapper)
+  in
+  let actual_rocq =
+    Command.Args.Expand
+      (fun ~dir ->
+        let open Action_builder.O in
+        let* wrapper = wrapper in
+        match wrapper with
+        | None -> Action_builder.return Appendable_list.empty
+        | Some _ ->
+          let rocq = Action.Prog.ok_exn rocq in
+          let+ () = Action_builder.path rocq in
+          Appendable_list.singleton (Path.reach rocq ~from:dir))
+  in
+  program, actual_rocq
 ;;
 
 let rocq_flags ~dir ~stanza_flags ~per_file_flags ~expander =
@@ -454,10 +482,7 @@ let package_ocamlpath_of_buildable
       | None -> packages
       | Some name -> Package.Name.Set.add packages (Lib_name.package_name name))
   in
-  Install_layout.For_rocq_only.lib_roots
-    context
-    ~theory_packages
-    ~plugin_packages
+  Install_layout.For_rocq_only.lib_roots context ~theory_packages ~plugin_packages
 ;;
 
 let dep_theory_file ~dir ~wrapper_name =
@@ -638,6 +663,7 @@ let setup_rocqdep_for_theory_rule
   in
   let stdout_to = dep_theory_file ~dir ~wrapper_name in
   let* rocq = rocq ~loc ~sctx ~dir in
+  let rocq, actual_rocq = rocq_command ~dir rocq in
   (* Rocqdep has to be called in the stanza's directory *)
   Super_context.add_rule
     ~loc
@@ -645,7 +671,11 @@ let setup_rocqdep_for_theory_rule
     ~dir
     (let open Action_builder.With_targets.O in
      Action_builder.(with_no_targets (goal source_rule))
-     >>> Command.run ~dir:(Path.build dir) ~stdout_to rocq rocqdep_flags)
+     >>> Command.run_dyn_prog
+           ~dir:(Path.build dir)
+           ~stdout_to
+           rocq
+           (actual_rocq :: rocqdep_flags))
 ;;
 
 module Dep_map = Stdune.Map.Make (Path)
@@ -867,6 +897,7 @@ let setup_rocqc_rule
   (* TODO: merge with boot_type *)
   let per_file_flags = Per_file.match_ modules_flags rocq_module in
   let* rocq = rocq ~loc ~dir ~sctx in
+  let rocq, actual_rocq = rocq_command ~dir rocq in
   let* expander = Super_context.expander sctx ~dir in
   let obj_files =
     Rocq_module.obj_files
@@ -936,12 +967,13 @@ let setup_rocqc_rule
      (* The way we handle the transitive dependencies of .vo files is not safe for
         sandboxing *)
      >>> Action_builder.With_targets.add ~file_targets
-         @@ Command.run
+         @@ Command.run_dyn_prog
               ~dir:(Path.build rocqc_dir)
               ?stdout_to:output_file
               ~sandbox:Sandbox_config.no_sandboxing
               rocq
-              [ cflag
+              [ actual_rocq
+              ; cflag
               ; targets
               ; S args
               ; timing_args
@@ -987,6 +1019,7 @@ let setup_rocqdoc_rules ~sctx ~dir ~theories_deps (s : Rocq_stanza.Theory.t) roc
     fun mode ->
       let* () =
         let* rocq = rocq ~loc ~sctx ~dir in
+        let rocq, actual_rocq = rocq_command ~dir rocq in
         (let doc_dir = Rocq_doc.rocqdoc_directory ~mode ~obj_dir:dir ~name in
          let file_flags =
            let globs =
@@ -1048,11 +1081,11 @@ let setup_rocqdoc_rules ~sctx ~dir ~theories_deps (s : Rocq_stanza.Theory.t) roc
                 @@ List.map ~f:(Rocq_module.glob_file ~obj_dir:dir) rocq_modules)
            ]
          in
-         Command.run
+         Command.run_dyn_prog
            ~sandbox:Sandbox_config.needs_sandboxing
            ~dir:(Path.build dir)
            rocq
-           file_flags
+           (actual_rocq :: file_flags)
          |> Action_builder.With_targets.map
               ~f:
                 (Action.Full.map ~f:(fun rocqdoc ->
@@ -1349,12 +1382,13 @@ let install_rules ~sctx ~dir s =
 let setup_rocqpp_rules ~sctx ~dir ({ loc; modules } : Rocq_stanza.Rocqpp.t) =
   let* rocq = rocq ~loc ~sctx ~dir
   and* mlg_files = Rocq_sources.mlg_files ~sctx ~dir ~modules in
+  let rocq, actual_rocq = rocq_command ~dir rocq in
   let mlg_rule m =
     let source = Path.build m in
     let target = Path.Build.set_extension m ~ext:Filename.Extension.ml in
     let args = [ Command.Args.A "pp-mlg"; Dep source; Hidden_targets [ target ] ] in
     let build_dir = Super_context.context sctx |> Context.build_dir in
-    Command.run ~dir:(Path.build build_dir) rocq args
+    Command.run_dyn_prog ~dir:(Path.build build_dir) rocq (actual_rocq :: args)
   in
   List.rev_map ~f:mlg_rule mlg_files |> Super_context.add_rules ~loc ~dir sctx
 ;;

@@ -32,8 +32,6 @@ wrapper.
   > EOF
 
   $ dune build foo.vo
-  File "dune", line 4, characters 4-11:
-  4 |    (wrapper ./wrapper.sh))))
-          ^^^^^^^
-  Error: Unknown field "wrapper"
-  [1]
+  $ cat wrapper.log
+  dep
+  compile

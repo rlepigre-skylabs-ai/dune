@@ -36,6 +36,9 @@ val rocqdoc_header : t -> String_with_vars.t option
 (** Rocqdoc footer config. *)
 val rocqdoc_footer : t -> String_with_vars.t option
 
+(** Wrapper for Rocq commands. *)
+val wrapper : t -> String_with_vars.t option
+
 (** Whether to output per-command timing for each file ([-time-file]). *)
 val timing : t -> Blang.t option
 

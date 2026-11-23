@@ -20,6 +20,7 @@ type t =
   ; rocqdoc_flags : Ordered_set_lang.Unexpanded.t
   ; rocqdoc_header : String_with_vars.t option
   ; rocqdoc_footer : String_with_vars.t option
+  ; wrapper : String_with_vars.t option
   ; timing : Blang.t option
   ; profiling : Blang.t option
   }
@@ -30,6 +31,7 @@ let default =
   ; rocqdoc_flags = Ordered_set_lang.Unexpanded.standard
   ; rocqdoc_header = None
   ; rocqdoc_footer = None
+  ; wrapper = None
   ; timing = None
   ; profiling = None
   }
@@ -40,6 +42,7 @@ let rocqdep_flags t = t.rocqdep_flags
 let rocqdoc_flags t = t.rocqdoc_flags
 let rocqdoc_header t = t.rocqdoc_header
 let rocqdoc_footer t = t.rocqdoc_footer
+let wrapper t = t.wrapper
 let timing t = t.timing
 let profiling t = t.profiling
 
@@ -68,6 +71,10 @@ let decode =
           field_o
             "rocqdoc_footer"
             (Syntax.since Stanza.syntax (3, 21) >>> String_with_vars.decode)
+        and+ wrapper =
+          field_o
+            "wrapper"
+            (Syntax.since Stanza.syntax (3, 26) >>> String_with_vars.decode)
         and+ timing =
           field_o "timing" (Syntax.since Stanza.syntax (3, 26) >>> Blang.decode)
         and+ profiling =
@@ -78,6 +85,7 @@ let decode =
         ; rocqdoc_flags
         ; rocqdoc_header
         ; rocqdoc_footer
+        ; wrapper
         ; timing
         ; profiling
         }))
@@ -89,6 +97,7 @@ let equal
       ; rocqdoc_flags
       ; rocqdoc_header
       ; rocqdoc_footer
+      ; wrapper
       ; timing
       ; profiling
       }
@@ -99,6 +108,7 @@ let equal
   && Ordered_set_lang.Unexpanded.equal rocqdoc_flags t.rocqdoc_flags
   && Option.equal String_with_vars.equal rocqdoc_header t.rocqdoc_header
   && Option.equal String_with_vars.equal rocqdoc_footer t.rocqdoc_footer
+  && Option.equal String_with_vars.equal wrapper t.wrapper
   && Option.equal Blang.equal timing t.timing
   && Option.equal Blang.equal profiling t.profiling
 ;;
