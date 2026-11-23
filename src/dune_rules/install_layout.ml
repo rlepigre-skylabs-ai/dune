@@ -275,11 +275,13 @@ module For_rocq_only = struct
     let* theory_root =
       if Package.Name.Set.is_empty theory_packages
       then Action_builder.return None
-      else Action_builder.map (theory_lib_root context_name theory_packages) ~f:Option.some
+      else
+        Action_builder.map (theory_lib_root context_name theory_packages) ~f:Option.some
     and* plugin_root =
       if Package.Name.Set.is_empty plugin_packages
       then Action_builder.return None
-      else Action_builder.map (plugin_lib_root context_name plugin_packages) ~f:Option.some
+      else
+        Action_builder.map (plugin_lib_root context_name plugin_packages) ~f:Option.some
     in
     Action_builder.return (List.filter_opt [ theory_root; plugin_root ])
   ;;
