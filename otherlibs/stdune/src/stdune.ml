@@ -131,8 +131,6 @@ module type Applicative = Applicative_intf.S
 module type Monad = Monad_intf.S
 module type Monoid = Monoid_intf.S
 
-include Either
-
 external reraise : exn -> _ = "%reraise"
 
 let compare _ _ = `Use_Poly_compare
@@ -141,7 +139,10 @@ let compare _ _ = `Use_Poly_compare
    scope *)
 
 type ('a, 'error) result = ('a, 'error) Result.t
-type ('a, 'b) either = ('a, 'b) Either.t
+
+type ('a, 'b) either = ('a, 'b) Either.t =
+  | Left of 'a
+  | Right of 'b
 
 type ordering = Ordering.t =
   | Lt
