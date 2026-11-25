@@ -10,6 +10,11 @@ val set_entry_resolver
     the set. *)
 val env : Context_name.t -> Package.Name.Set.t -> Env.t Action_builder.t
 
+(** Like [env], but omits Rocq theory entries under [rocq.d]. Runtime
+    dependencies may refer to their own package while that package's theories
+    are still being built. *)
+val runtime_env : Context_name.t -> Package.Name.Set.t -> Env.t Action_builder.t
+
 (** Engine dispatch for [_build/_private/<context>/.packages/<rest>]. Called
     from [Gen_rules]; the layout dir is owned by this module. Resolves to:
     - no rules for the [.packages/] root itself ([rest = []]),

@@ -303,6 +303,7 @@ let to_dune_library
       ~exit_module:None
       ~instrumentation_backend:None
       ~melange_runtime_deps
+      ~runtime_deps:None
       ~root_module:None
   in
   Dune_package.Lib.of_findlib info external_location

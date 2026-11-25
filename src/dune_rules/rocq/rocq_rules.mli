@@ -44,7 +44,7 @@ val rocqtop_args_theory
   -> dir_contents:Dir_contents.t
   -> Rocq_stanza.Theory.t
   -> Rocq_module.t
-  -> 'a Command.Args.t list Memo.t
+  -> ('a Command.Args.t list * Env.t Action_builder.t) Memo.t
 
 (** rocq.extraction stanza rules *)
 val setup_extraction_rules
@@ -60,7 +60,7 @@ val rocqtop_args_extraction
   -> dir:Path.Build.t
   -> Rocq_stanza.Extraction.t
   -> Rocq_module.t
-  -> 'a Command.Args.t list Memo.t
+  -> ('a Command.Args.t list * Env.t Action_builder.t) Memo.t
 
 (** Rules for .mlg to .ml transformation *)
 val setup_rocqpp_rules

@@ -139,6 +139,7 @@ val synopsis : _ t -> string option
 val jsoo_runtime : 'path t -> 'path list
 val wasmoo_runtime : 'path t -> 'path list
 val melange_runtime_deps : 'path t -> 'path File_deps.t
+val runtime_deps : _ t -> (Loc.t * Dep_conf.t list) option
 val obj_dir : 'path t -> 'path Obj_dir.t
 val virtual_ : _ t -> bool
 
@@ -256,6 +257,7 @@ val create
   -> exit_module:Module_name.t option
   -> instrumentation_backend:(Loc.t * Lib_name.t) option
   -> melange_runtime_deps:'a File_deps.t
+  -> runtime_deps:(Loc.t * Dep_conf.t list) option
   -> root_module:Module_name.t option
   -> 'a t
 

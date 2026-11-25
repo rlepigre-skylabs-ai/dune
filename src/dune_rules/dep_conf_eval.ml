@@ -384,7 +384,7 @@ let rec dep expander : Dep_conf.t -> _ = function
        [])
   | Sandbox_config _ -> Other (Action_builder.return [])
 
-and combined_package_deps_builder expander pkgs =
+and combined_package_deps_builder expander pkgs ~runtime =
   let open Action_builder.O in
   (* Resolve packages and name the layout dir in the host context, same as
      [make_bin_env] above. *)
@@ -442,6 +442,8 @@ and combined_package_deps_builder expander pkgs =
     let* local_env =
       if Package.Name.Set.is_empty local_package_names
       then Action_builder.return Env.empty
+      else if runtime
+      then Install_layout.runtime_env context.name local_package_names
       else Install_layout.env context.name local_package_names
     in
     if Package.Name.Set.is_empty lockdir_package_names
@@ -487,7 +489,7 @@ and named_paths_builder ~expander l =
     let combined_packages_builder =
       match package_swvs with
       | [] -> None
-      | pkgs -> Some (combined_package_deps_builder expander pkgs)
+      | pkgs -> Some (combined_package_deps_builder expander pkgs ~runtime:false)
     in
     let builders, bindings, include_envs =
       List.fold_left
@@ -634,7 +636,7 @@ let unnamed sandbox ~expander l =
   let package_env =
     match package_swvs with
     | [] -> Action_builder.return Env.empty
-    | pkgs -> combined_package_deps_builder expander pkgs
+    | pkgs -> combined_package_deps_builder expander pkgs ~runtime:false
   in
   let has_combined = not (List.is_empty package_swvs) in
   let bin_names = List.filter_map l ~f:bin_dep_name in
@@ -662,6 +664,23 @@ let unnamed sandbox ~expander l =
        Env_path.extend_env_concat_path package_env bin_env)
   in
   action_env, List.fold_left l ~init:sandbox ~f:add_sandbox_config
+;;
+
+let runtime ~expander l =
+  let expander = prepare_expander expander in
+  let package_swvs = List.concat_map l ~f:package_dep_swvs in
+  let package_env =
+    match package_swvs with
+    | [] -> Action_builder.return Env.empty
+    | pkgs -> combined_package_deps_builder expander pkgs ~runtime:true
+  in
+  let bin_names = List.filter_map l ~f:bin_dep_name in
+  let bin_env = make_bin_env expander bin_names in
+  Action_builder.memoize
+    "runtime deps action_env"
+    (let+ package_env = package_env
+     and+ bin_env = bin_env in
+     Install.Roots.extend_env_concat_path_vars package_env bin_env)
 ;;
 
 let unnamed_get_paths ~expander l =

@@ -67,6 +67,14 @@ files for executables. See
 - ``(libraries <library-dependencies>)`` specifies the library dependencies. See
   :doc:`/reference/library-dependencies` for more details.
 
+- ``(runtime_deps (<runtime-dependencies>))`` declares programs or packages
+  needed when the executable runs. Each dependency is either
+  ``(package <package>)`` or ``%{bin:<program>}``. These dependencies are
+  combined with runtime dependencies propagated from linked libraries. See the
+  corresponding ``runtime_deps`` field in :doc:`library` for details.
+
+  .. versionadded:: 3.26
+
 - ``(link_flags <flags>)`` specifies additional flags to pass to the linker.
   This field supports ``(:include ...)`` forms.
 

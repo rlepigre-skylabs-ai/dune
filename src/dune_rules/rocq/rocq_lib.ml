@@ -83,6 +83,7 @@ and Dune : sig
     ; theories : (Loc.t * R.t) list Resolve.t
     ; libraries : (Loc.t * Lib.t) list Resolve.t
     ; theories_closure : R.t list Resolve.t Lazy.t
+    ; runtime_deps : Loc.t * Dep_conf.t list
     ; public_name : Lib_name.t option
     ; package : Package.t option
     }
@@ -91,6 +92,7 @@ and Dune : sig
   val src_root : t -> Path.Build.t
   val obj_root : t -> Path.Build.t
   val implicit : t -> bool
+  val runtime_deps : t -> Loc.t * Dep_conf.t list
 
   (** ML libraries *)
   val libraries : t -> (Loc.t * Lib.t) list Resolve.t
@@ -106,6 +108,7 @@ end = struct
     ; theories : (Loc.t * R.t) list Resolve.t
     ; libraries : (Loc.t * Lib.t) list Resolve.t
     ; theories_closure : R.t list Resolve.t Lazy.t
+    ; runtime_deps : Loc.t * Dep_conf.t list
     ; public_name : Lib_name.t option
     ; package : Package.t option
     }
@@ -121,6 +124,7 @@ end = struct
         ; theories
         ; libraries
         ; theories_closure
+        ; runtime_deps
         ; public_name
         ; package
         }
@@ -139,6 +143,7 @@ end = struct
           , Resolve.to_dyn (Dyn.list (Dyn.pair Loc.to_dyn Lib.to_dyn)) libraries )
         ; ( "theories_closure"
           , Resolve.to_dyn (Dyn.list R.to_dyn) (Lazy.force theories_closure) )
+        ; "runtime_deps", Dyn.pair Loc.to_dyn (Dyn.list Dep_conf.to_dyn) runtime_deps
         ; "public_name", Dyn.option Lib_name.to_dyn public_name
         ; "package", Dyn.option Package.to_dyn package
         ])
@@ -147,6 +152,7 @@ end = struct
   let src_root t = t.src_root
   let obj_root t = t.obj_root
   let implicit t = t.implicit
+  let runtime_deps t = t.runtime_deps
   let libraries t = t.libraries
 end
 
@@ -556,6 +562,7 @@ module DB = struct
           lazy
             (Resolve.bind theories ~f:(fun theories ->
                List.map theories ~f:snd |> top_closure))
+      ; runtime_deps = s.buildable.runtime_deps
       ; public_name
       ; package = s.package
       }

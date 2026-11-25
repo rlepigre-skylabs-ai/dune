@@ -23,6 +23,8 @@ module Dune : sig
   (** Source directory *)
   val src_root : t -> Path.Build.t
 
+  val runtime_deps : t -> Loc.t * Dep_conf.t list
+
   (** ML libraries *)
   val libraries : t -> (Loc.t * Lib.t) list Resolve.t
 end

@@ -150,9 +150,9 @@ let term =
       let* prog = Super_context.resolve_program_memo sctx ~dir ~loc:None real_binary in
       let prog = Action.Prog.ok_exn prog in
       let* () = Build_system.build_file prog in
-      (* Get args *)
+      (* Get args and runtime dependencies. *)
+      let* args, runtime_env = args in
       let* (args, _) : string list * Dep.Fact.t Dep.Map.t =
-        let* args = args in
         let dir = Path.external_ Path.External.initial_cwd in
         let args =
           Dune_rules.Command.expand ~dir (S args)
@@ -160,7 +160,9 @@ let term =
         in
         Action_builder.evaluate_and_collect_facts args.build
       in
+      let* runtime_env, _ = Action_builder.evaluate_and_collect_facts runtime_env in
       let+ env = Super_context.context_env_by_dir ~dir sctx in
+      let env = Install.Roots.extend_env_concat_path_vars env runtime_env in
       Path.to_string prog, rocq_arg, args, env
     in
     (* Careful about the first argument to "rocq" *)

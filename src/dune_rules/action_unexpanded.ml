@@ -87,7 +87,7 @@ module Action_expander : sig
     val prog_and_args
       :  force_host:bool
       -> String_with_vars.t
-      -> (Action.Prog.t * string list) t
+      -> (Action.Prog.t * string list * Env.t) t
 
     module At_rule_eval_stage : sig
       (* Expansion that happens at the time the rule is constructed rather than
@@ -416,7 +416,7 @@ end = struct
         let dir = Path.build env.dir in
         let loc = loc sw in
         let* prog, args = Expander.expand env sw ~mode:At_least_one in
-        let+ prog =
+        let* prog =
           match prog with
           | Value.Dir p ->
             User_error.raise
@@ -452,19 +452,24 @@ end = struct
         in
         let args = Value.L.to_strings ~dir args in
         match prog with
-        | Ok prog ->
-          let dep, prog, args = Expander.map_exe ~force_host env.expander prog args in
-          Ok prog, args, [ dep ]
-        | Error _ as v -> v, args, []
+        | Ok original_prog ->
+          let* runtime_env =
+            Runtime_deps.env_for_executable ~expander:env.expander original_prog
+          in
+          let dep, prog, args =
+            Expander.map_exe ~force_host env.expander original_prog args
+          in
+          Action_builder.return (Ok prog, args, [ dep ], runtime_env)
+        | Error _ as v -> Action_builder.return (v, args, [], Env.empty)
       in
-      register_deps b env acc ~f:(function _, _, deps -> deps)
+      register_deps b env acc ~f:(function _, _, deps, _ -> deps)
     ;;
 
     let prog_and_args ~force_host sw env acc =
       Memo.map
         ~f:(fun (x, v) ->
           ( Action_builder.bind
-              ~f:(fun (prog, args, _) -> Action_builder.return (prog, args))
+              ~f:(fun (prog, args, _, env) -> Action_builder.return (prog, args, env))
               x
           , v ))
         (prog_args_and_deps ~force_host sw env acc)
@@ -486,9 +491,16 @@ let rec expand_action ~format_generated_diffs (t : Dune_lang.Action.t)
   let expand = expand_action ~format_generated_diffs in
   let expand_run ~force_host prog args =
     let+ args = A.all (List.map args ~f:E.strings)
-    and+ prog, more_args = E.prog_and_args ~force_host prog in
+    and+ prog, more_args, env = E.prog_and_args ~force_host prog in
     let args = List.concat args in
-    prog, more_args @ args
+    prog, more_args @ args, env
+  in
+  let combine_actions make children =
+    let env =
+      List.fold_left children ~init:Env.empty ~f:(fun env child ->
+        Install.Roots.extend_env_concat_path_vars env child.Action.Full.props.env)
+    in
+    make children |> Action.Full.set_env env
   in
   let expand_run_action ~force_host ~action_name args =
     let string_args =
@@ -502,9 +514,10 @@ let rec expand_action ~format_generated_diffs (t : Dune_lang.Action.t)
         [ Pp.textf "All arguments to \"%s\" action must be strings" action_name ];
     match string_args with
     | prog :: args ->
-      let+ prog, args = expand_run ~force_host prog args in
+      let+ prog, args, env = expand_run ~force_host prog args in
       O.Run { prog; args = Appendable_list.of_list args; can_run_in_action_runner = true }
       |> Action.Full.make
+      |> Action.Full.add_env env
     | [] ->
       User_error.raise
         [ Pp.textf "\"%s\" action must have at least one argument" action_name ]
@@ -516,8 +529,8 @@ let rec expand_action ~format_generated_diffs (t : Dune_lang.Action.t)
     let+ t = expand t in
     Action.Full.map t ~f:(fun t -> O.With_accepted_exit_codes (pred, t))
   | Dynamic_run (prog, args) ->
-    let+ prog, args = expand_run ~force_host:false prog args in
-    Action_plugin.action ~prog ~args |> Action.Full.make
+    let+ prog, args, env = expand_run ~force_host:false prog args in
+    Action_plugin.action ~prog ~args |> Action.Full.make |> Action.Full.add_env env
   | Chdir (fn, t) ->
     E.At_rule_eval_stage.path fn ~f:(fun dir ->
       A.chdir
@@ -544,10 +557,10 @@ let rec expand_action ~format_generated_diffs (t : Dune_lang.Action.t)
     Action.Full.map t ~f:(fun t -> O.Ignore (outputs, t))
   | Progn l ->
     let+ l = A.all (List.map l ~f:expand) in
-    Action.Full.progn l
+    combine_actions Action.Full.progn l
   | Concurrent l ->
     let+ l = A.all (List.map l ~f:expand) in
-    Action.Full.concurrent l
+    combine_actions Action.Full.concurrent l
   | Echo xs ->
     let+ l = A.all (List.map xs ~f:E.strings) in
     let l = List.concat l in
@@ -643,7 +656,7 @@ let rec expand_action ~format_generated_diffs (t : Dune_lang.Action.t)
   | No_infer t -> A.no_infer (expand t)
   | Pipe (outputs, l) ->
     let+ l = A.all (List.map l ~f:expand) in
-    Action.Full.pipe outputs l
+    combine_actions (Action.Full.pipe outputs) l
   | Cram script ->
     let+ script = E.dep script in
     Cram_exec.action script |> Action.Full.make

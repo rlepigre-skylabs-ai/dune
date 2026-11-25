@@ -25,6 +25,7 @@ module Lib_info = Lib_info
 module Lib_id = Lib_id
 module Modules = Modules
 module Exe_rules = Exe_rules
+module Runtime_deps = Runtime_deps
 module Lib_rules = Lib_rules
 module Obj_dir = Obj_dir
 module Merlin_ident = Merlin_ident

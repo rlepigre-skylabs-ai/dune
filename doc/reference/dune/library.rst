@@ -208,6 +208,28 @@ order to declare a multi-directory library, you need to use the
 
    You need to specify these runtime dependencies here.
 
+.. describe:: (runtime_deps (<runtime-dependencies>))
+
+   Declares programs or packages that code in the library may need when it is
+   executed. Runtime dependencies are propagated through the library closure.
+   Dune adds them to the environment when it runs a workspace executable that
+   links the library, including test actions and ``dune exec``.
+
+   A runtime dependency is either ``(package <package>)`` or
+   ``%{bin:<program>}``. A package dependency exposes the package's install
+   environment, including all of its installed binaries. A binary dependency
+   adds only the named program to ``PATH``.
+
+   Runtime dependencies are deferred until an executable is run. Consequently,
+   a library may refer to a binary or package that contains the library itself
+   without creating a build or install cycle.
+
+   This environment is established for commands launched by Dune. An installed
+   executable launched directly still requires the installation prefix's
+   ``bin`` directory to be present in ``PATH``.
+
+   .. versionadded:: 3.26
+
 .. describe:: (virtual_deps (<opam-packages>))
 
    Sometimes opam packages enable a specific feature only if another package is

@@ -344,6 +344,7 @@ type 'path t =
   ; instrumentation_backend : (Loc.t * Lib_name.t) option
   ; path_kind : 'path path
   ; melange_runtime_deps : 'path File_deps.t
+  ; runtime_deps : (Loc.t * Dep_conf.t list) option
   ; root_module : Module_name.t option
   }
 
@@ -382,6 +383,7 @@ let public_headers t = t.public_headers
 let exit_module t = t.exit_module
 let instrumentation_backend t = t.instrumentation_backend
 let melange_runtime_deps t = t.melange_runtime_deps
+let runtime_deps t = t.runtime_deps
 let root_module t = t.root_module
 let plugins t = t.plugins
 let src_dir t = t.src_dir
@@ -461,6 +463,7 @@ let create
       ~exit_module
       ~instrumentation_backend
       ~melange_runtime_deps
+      ~runtime_deps
       ~root_module
   =
   { loc
@@ -504,6 +507,7 @@ let create
   ; instrumentation_backend
   ; path_kind
   ; melange_runtime_deps
+  ; runtime_deps
   ; root_module
   }
 ;;
@@ -601,6 +605,7 @@ let to_dyn
       ; exit_module
       ; instrumentation_backend
       ; melange_runtime_deps
+      ; runtime_deps
       ; entry_modules
       ; root_module
       }
@@ -655,6 +660,7 @@ let to_dyn
     ; "exit_module", option Module_name.to_dyn exit_module
     ; "instrumentation_backend", option (snd Lib_name.to_dyn) instrumentation_backend
     ; "melange_runtime_deps", File_deps.to_dyn path melange_runtime_deps
+    ; "runtime_deps", option (pair Loc.to_dyn (list Dep_conf.to_dyn)) runtime_deps
     ; "root_module", option Module_name.to_dyn root_module
     ]
 ;;
@@ -715,6 +721,7 @@ let for_dune_package
   ; modes
   ; modules
   ; melange_runtime_deps
+  ; runtime_deps = None
   ; public_headers
   }
   |> map_path
@@ -767,5 +774,6 @@ let for_instance ~dir ~ext_lib t =
   ; wasmoo_runtime = []
   ; path_kind = Local
   ; melange_runtime_deps = File_deps.External []
+  ; runtime_deps = None
   }
 ;;

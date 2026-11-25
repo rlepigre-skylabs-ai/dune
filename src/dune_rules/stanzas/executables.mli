@@ -42,6 +42,7 @@ type t =
   ; public_names : (Loc.t * string option) Nonempty_list.t option
   ; link_flags : Dune_lang.Link_flags.Spec.t
   ; link_deps : Dep_conf.t list
+  ; runtime_deps : Loc.t * Dep_conf.t list
   ; modes : Loc.t Link_mode.Map.t
   ; optional : bool
   ; buildable : Buildable.t

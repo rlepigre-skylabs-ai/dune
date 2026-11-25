@@ -75,13 +75,14 @@ module Buildable = struct
     ; use_corelib : bool
     ; plugins : (Loc.t * Lib_name.t) list (** ocaml libraries *)
     ; theories : Theory_dep.t list (** rocq libraries *)
+    ; runtime_deps : Loc.t * Dep_conf.t list
     ; loc : Loc.t
     }
 
   let decode =
     let* rocq_lang_version = get_rocq_syntax () in
-    let+ loc = loc
-    and+ flags = Ordered_set_lang.Unexpanded.field "flags"
+    let* stanza_loc = loc in
+    let+ flags = Ordered_set_lang.Unexpanded.field "flags"
     and+ mode = field_o "mode" Rocq_mode.decode
     and+ stdlib_opt =
       field_o
@@ -96,13 +97,28 @@ module Buildable = struct
     and+ no_corelib_opt =
       field_o "no_corelib" (Dune_lang.Syntax.since rocq_syntax (0, 14) >>> return true)
     and+ plugins = field "plugins" (repeat (located Lib_name.decode)) ~default:[]
-    and+ theories = field "theories" (repeat Theory_dep.decode) ~default:[] in
+    and+ theories = field "theories" (repeat Theory_dep.decode) ~default:[]
+    and+ runtime_deps =
+      field
+        "runtime_deps"
+        (Dune_lang.Syntax.since rocq_syntax (0, 15)
+         >>> located (repeat Dep_conf.decode_runtime))
+        ~default:(stanza_loc, [])
+    in
     let use_corelib =
       if rocq_lang_version < (0, 14)
       then Option.value stdlib_opt ~default:true
       else not (Option.value no_corelib_opt ~default:false)
     in
-    { flags; mode; use_corelib; rocq_lang_version; plugins; theories; loc }
+    { flags
+    ; mode
+    ; use_corelib
+    ; rocq_lang_version
+    ; plugins
+    ; theories
+    ; runtime_deps
+    ; loc = stanza_loc
+    }
   ;;
 end
 

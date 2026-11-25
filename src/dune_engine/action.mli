@@ -171,6 +171,7 @@ module Full : sig
       field of the action. *)
 
   val add_env : Env.t -> t -> t
+  val set_env : Env.t -> t -> t
   val add_locks : Path.t list -> t -> t
   val add_sandbox : Sandbox_config.t -> t -> t
   val add_can_go_in_shared_cache : bool -> t -> t

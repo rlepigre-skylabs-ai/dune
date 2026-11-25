@@ -407,6 +407,7 @@ module Lib = struct
            ~exit_module:None
            ~instrumentation_backend
            ~melange_runtime_deps
+           ~runtime_deps:None
            ~root_module:None
          (* CR-someday rgrinberg: maybe we should add this to installed packages? *)
        in

@@ -409,6 +409,7 @@ type t =
   ; public_names : (Loc.t * string option) Nonempty_list.t option
   ; link_flags : Link_flags.Spec.t
   ; link_deps : Dep_conf.t list
+  ; runtime_deps : Loc.t * Dep_conf.t list
   ; modes : Loc.t Link_mode.Map.t
   ; optional : bool
   ; buildable : Buildable.t
@@ -440,6 +441,7 @@ let bootstrap_info_extension =
 
 let common =
   let* dune_version = Dune_lang.Syntax.get_exn Stanza.syntax in
+  let* stanza_loc = loc in
   let+ buildable = Buildable.decode Executable
   and+ (_ : bool) =
     field
@@ -447,6 +449,12 @@ let common =
       ~default:true
       (Dune_lang.Syntax.deleted_in Stanza.syntax (1, 0) >>> bool)
   and+ link_deps = field "link_deps" (repeat Dep_conf.decode) ~default:[]
+  and+ runtime_deps =
+    field
+      "runtime_deps"
+      (Dune_lang.Syntax.since Stanza.syntax (3, 26)
+       >>> located (repeat Dep_conf.decode_runtime))
+      ~default:(stanza_loc, [])
   and+ link_flags = Link_flags.Spec.decode ~check:None
   and+ modes =
     field
@@ -546,6 +554,7 @@ let common =
     ; public_names
     ; link_flags
     ; link_deps
+    ; runtime_deps
     ; modes
     ; optional
     ; buildable

@@ -97,6 +97,12 @@ let compute_entries context_name root packages =
       ]
 ;;
 
+let is_rocq_theory (entry : _ Install.Entry.Expanded.t) =
+  Install.Entry.Dst.to_string entry.dst
+  |> String.split ~on:'/'
+  |> fun components -> List.mem components "rocq.d" ~equal:String.equal
+;;
+
 let entries =
   let rocq_deps entries =
     let dirs, deps =
@@ -105,13 +111,8 @@ let entries =
         ~init:(Path.Build.Map.empty, Dep.Set.empty)
         ~f:(fun dst (entry : Path.t Install.Entry.Expanded.t) (dirs, deps) ->
           let is_lib_entry =
-            let is_rocq_theory =
-              Install.Entry.Dst.to_string entry.dst
-              |> String.split ~on:'/'
-              |> fun components -> List.mem components "rocq.d" ~equal:String.equal
-            in
             match (entry.section : Section.t) with
-            | Lib | Libexec -> not is_rocq_theory
+            | Lib | Libexec -> not (is_rocq_theory entry)
             | _ -> false
           in
           match (entry.kind : Install.Entry.Expanded.kind) with
@@ -150,6 +151,10 @@ let entries =
           |> Dep.file_selector
           |> Dep.Set.add deps)
   in
+  let runtime_deps entries =
+    Path.Build.Map.foldi entries ~init:Dep.Set.empty ~f:(fun dst entry deps ->
+      if is_rocq_theory entry then deps else Dep.Set.add deps (Dep.file (Path.build dst)))
+  in
   let set_hash s = List.hash Package.Name.hash (Package.Name.Set.to_list s) in
   let memo =
     Memo.create
@@ -167,14 +172,14 @@ let entries =
          let root = dir ~context ~key in
          let open Memo.O in
          let+ entries = compute_entries context root packages in
-         entries, lazy (rocq_deps entries))
+         entries, lazy (rocq_deps entries), lazy (runtime_deps entries))
   in
   fun context packages -> Memo.exec memo (context, packages)
 ;;
 
 let files context_name packages =
   let open Memo.O in
-  let+ entries, _ = entries context_name packages in
+  let+ entries, _, _ = entries context_name packages in
   Path.Build.Map.keys entries |> List.map ~f:Path.build
 ;;
 
@@ -189,6 +194,15 @@ let root context_name packages = dir ~context:context_name ~key:(Key.encode pack
 let env context_name packages =
   let open Action_builder.O in
   let+ () = deps context_name packages in
+  let layout_root = root context_name packages in
+  let roots = Install.Roots.opam_from_prefix layout_root ~relative:Path.Build.relative in
+  Install.Roots.add_to_env roots Env.empty
+;;
+
+let runtime_env context_name packages =
+  let open Action_builder.O in
+  let* _, _, deps = Action_builder.of_memo (entries context_name packages) in
+  let+ () = Action_builder.deps (Lazy.force deps) in
   let layout_root = root context_name packages in
   let roots = Install.Roots.opam_from_prefix layout_root ~relative:Path.Build.relative in
   Install.Roots.add_to_env roots Env.empty
@@ -217,7 +231,7 @@ let gen_rules context_name ~dir rest =
     (match Key.decode key with
      | None -> Memo.return Build_config.Gen_rules.no_rules
      | Some packages ->
-       let+ entries, _ = entries context_name packages in
+       let+ entries, _, _ = entries context_name packages in
        let directory_targets =
          Path.Build.Map.filter_map entries ~f:(fun entry ->
            match (entry.kind : Install.Entry.Expanded.kind) with
@@ -257,7 +271,7 @@ module For_rocq_only = struct
   let plugin_lib_root context_name packages =
     let open Action_builder.O in
     let+ () =
-      let* _, deps = Action_builder.of_memo (entries context_name packages) in
+      let* _, deps, _ = Action_builder.of_memo (entries context_name packages) in
       Action_builder.deps (Lazy.force deps)
     in
     lib_root context_name packages

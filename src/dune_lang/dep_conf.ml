@@ -151,6 +151,34 @@ let decode files =
 let decode_no_files = decode `Forbid
 let decode = decode `Allow
 
+let decode_runtime =
+  let* loc, dep = located decode in
+  match dep with
+  | Package _ -> return dep
+  | File sw ->
+    (match String_with_vars.pform_only sw with
+     | Some (Macro { macro = Bin; _ }) -> return dep
+     | _ ->
+       User_error.raise
+         ~loc
+         [ Pp.text
+             "Runtime dependencies must be packages or binaries of the form %{bin:...}."
+         ])
+  | Alias _
+  | Alias_rec _
+  | Glob_files _
+  | Source_tree _
+  | Universe
+  | Env_var _
+  | Sandbox_config _
+  | Include _ ->
+    User_error.raise
+      ~loc
+      [ Pp.text
+          "Runtime dependencies must be packages or binaries of the form %{bin:...}."
+      ]
+;;
+
 let decode_bindings =
   let+ bindings = Bindings.decode decode in
   Bindings.fold bindings ~init:() ~f:(fun binding () ->

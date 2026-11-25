@@ -51,6 +51,7 @@ val repr : t Repr.t
 
 include Conv.S with type t := t
 
+val decode_runtime : t Decoder.t
 val decode_no_files : t Decoder.t
 val decode_bindings : t Bindings.t Decoder.t
 val command_line_parser : stanza_version:Syntax.Version.t -> t Decoder.t

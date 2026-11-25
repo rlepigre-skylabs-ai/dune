@@ -39,6 +39,7 @@ type t =
   ; enabled_if : Blang.t
   ; instrumentation_backend : (Loc.t * Lib_name.t) option
   ; melange_runtime_deps : Loc.t * Dep_conf.t list
+  ; runtime_deps : Loc.t * Dep_conf.t list
   }
 
 include Stanza.S with type t := t

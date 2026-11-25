@@ -23,8 +23,15 @@ let gen_parse names =
      String_with_vars.add_user_vars_to_decoding_env
        (Bindings.var_names deps)
        (let* dune_version = Dune_lang.Syntax.get_exn Stanza.syntax in
+        let* stanza_loc = loc in
         let+ buildable = Buildable.decode Executable
         and+ link_flags = Dune_lang.Link_flags.Spec.decode ~check:None
+        and+ runtime_deps =
+          field
+            "runtime_deps"
+            (Dune_lang.Syntax.since Stanza.syntax (3, 26)
+             >>> located (repeat Dep_conf.decode_runtime))
+            ~default:(stanza_loc, [])
         and+ names = names
         and+ package = Stanza_pkg.field_opt () >>| Option.map ~f:snd
         and+ locks = Locks.field ()
@@ -55,6 +62,7 @@ let gen_parse names =
         { exes =
             { Executables.link_flags
             ; link_deps = []
+            ; runtime_deps
             ; modes
             ; optional = false
             ; buildable

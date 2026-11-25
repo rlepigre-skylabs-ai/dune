@@ -29,6 +29,7 @@ module Buildable : sig
     ; use_corelib : bool
     ; plugins : (Loc.t * Lib_name.t) list (** ocaml plugins *)
     ; theories : Theory_dep.t list (** rocq libraries *)
+    ; runtime_deps : Loc.t * Dep_conf.t list
     ; loc : Loc.t
     }
 end

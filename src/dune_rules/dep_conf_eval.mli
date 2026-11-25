@@ -14,6 +14,12 @@ val unnamed
   -> Dep_conf.t list
   -> Env.t Action_builder.t * Sandbox_config.t
 
+(** Evaluates runtime dependencies. Only [(package ...)] and [%{bin:...}]
+    entries are accepted by the stanza decoders that use this function. Rocq
+    theory files are omitted from package layouts so that packages can refer to
+    their own runtime contents without introducing a cycle. *)
+val runtime : expander:Expander.t -> Dep_conf.t list -> Env.t Action_builder.t
+
 (** Evaluates unnamed dependency specifications. Returns the paths to the newly
     evaluated dependencies. *)
 val unnamed_get_paths

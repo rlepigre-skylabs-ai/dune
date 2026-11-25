@@ -67,6 +67,7 @@ The Rocq theory stanza is very similar in form to the OCaml
      (synopsis <text>)
      (modules <ordered_set_lang>)
      (plugins <ocaml_plugins>)
+     (runtime_deps <runtime_dependencies>)
      (flags <rocq_flags>)
      (modules_flags <flags_map>)
      (legacy_install)
@@ -214,6 +215,19 @@ The semantics of the fields are:
   Rocq so that ``rocq dep`` and ``rocq c`` can find the corresponding OCaml
   libraries declared in ``<ocaml_plugins>``. This allows a Rocq theory to
   depend on OCaml plugins. The field must contain a public library name.
+
+- ``runtime_deps`` declares packages or programs needed while Rocq processes
+  the theory. Each dependency is either ``(package <package>)`` or
+  ``%{bin:<program>}``. Package dependencies expose the package's install
+  environment; binary dependencies add only the selected program to ``PATH``.
+
+  Runtime dependencies propagate through theory and plugin-library
+  dependencies and apply to ``rocq dep``, compilation, documentation, and
+  ``dune rocq top``. They are deferred until those commands run, so a theory or
+  plugin library can refer to runtime contents of its own package without
+  depending on its own ``rocq.d`` outputs.
+
+  .. versionadded:: 3.26
 
 - Your Rocq theory can depend on other theories --- globally installed or defined
   in the current workspace --- by adding the theories names to the

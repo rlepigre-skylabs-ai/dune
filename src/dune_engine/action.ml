@@ -576,6 +576,7 @@ module Full = struct
     if Env.is_empty env then t else { t with props = Props.add_env t.props env }
   ;;
 
+  let set_env env t = { t with props = { t.props with env } }
   let add_locks locks t = { t with props = Props.add_locks t.props locks }
 
   let add_can_go_in_shared_cache can_go_in_shared_cache t =

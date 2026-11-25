@@ -310,12 +310,21 @@ end = struct
   ;;
 end
 
-let package_ocamlpath_flags package_ocamlpath =
+type package_context =
+  { ocamlpath : Path.Build.t list
+  ; runtime_env : Env.t
+  }
+
+let package_ocamlpath_flags package_context =
   Command.Args.Dyn
-    (Action_builder.map package_ocamlpath ~f:(fun paths ->
+    (Action_builder.map package_context ~f:(fun { ocamlpath; _ } ->
        Command.Args.S
-         (List.concat_map paths ~f:(fun path ->
+         (List.concat_map ocamlpath ~f:(fun path ->
             [ Command.Args.A "-I"; Command.Args.Path (Path.build path) ]))))
+;;
+
+let package_runtime_env package_context =
+  Action_builder.map package_context ~f:(fun { runtime_env; _ } -> runtime_env)
 ;;
 
 let rocqc_file_flags ~dir ~theories_deps ~wrapper_name ~package_ocamlpath
@@ -454,6 +463,8 @@ let libs_of_theory ~lib_db ~theories_deps plugins : (Lib.t list * _) Resolve.Mem
 ;;
 
 let package_ocamlpath_of_buildable
+      ~sctx
+      ~dir
       ~context
       ~lib_db
       ~theories_deps
@@ -482,7 +493,42 @@ let package_ocamlpath_of_buildable
       | None -> packages
       | Some name -> Package.Name.Set.add packages (Lib_name.package_name name))
   in
-  Install_layout.For_rocq_only.lib_roots context ~theory_packages ~plugin_packages
+  let ocamlpath =
+    Install_layout.For_rocq_only.lib_roots context ~theory_packages ~plugin_packages
+  in
+  let runtime_deps =
+    let current = [ dir, buildable.runtime_deps ] in
+    let libraries =
+      List.filter_map all_libs ~f:(fun lib ->
+        let info = Lib.info lib in
+        match
+          Lib_info.runtime_deps info, Path.as_in_build_dir (Lib_info.src_dir info)
+        with
+        | Some deps, Some dir -> Some (dir, deps)
+        | None, Some _ | (None | Some _), None -> None)
+    in
+    let theories =
+      List.filter_map theories ~f:(function
+        | Rocq_lib.Dune theory ->
+          Some (Rocq_lib.Dune.src_root theory, Rocq_lib.Dune.runtime_deps theory)
+        | Legacy _ | Package _ -> None)
+    in
+    current @ libraries @ theories
+  in
+  let runtime_env =
+    Action_builder.List.map runtime_deps ~f:(fun (dir, (_loc, deps)) ->
+      if List.is_empty deps
+      then Action_builder.return Env.empty
+      else
+        let* expander = Action_builder.of_memo (Super_context.expander sctx ~dir) in
+        Dep_conf_eval.runtime ~expander deps)
+    >>| List.fold_left ~init:Env.empty ~f:Install.Roots.extend_env_concat_path_vars
+  in
+  Action_builder.memoize
+    "rocq package context"
+    (let+ ocamlpath = ocamlpath
+     and+ runtime_env = runtime_env in
+     { ocamlpath; runtime_env })
 ;;
 
 let dep_theory_file ~dir ~wrapper_name =
@@ -674,6 +720,7 @@ let setup_rocqdep_for_theory_rule
      >>> Command.run_dyn_prog
            ~dir:(Path.build dir)
            ~stdout_to
+           ~env:(package_runtime_env package_ocamlpath)
            rocq
            (actual_rocq :: rocqdep_flags))
 ;;
@@ -971,6 +1018,7 @@ let setup_rocqc_rule
               ~dir:(Path.build rocqc_dir)
               ?stdout_to:output_file
               ~sandbox:Sandbox_config.no_sandboxing
+              ~env:(package_runtime_env package_ocamlpath)
               rocq
               [ actual_rocq
               ; cflag
@@ -1004,13 +1052,21 @@ let source_rule ~sctx theories =
      List.concat l)
 ;;
 
-let setup_rocqdoc_rules ~sctx ~dir ~theories_deps (s : Rocq_stanza.Theory.t) rocq_modules =
+let setup_rocqdoc_rules
+      ~sctx
+      ~dir
+      ~theories_deps
+      ~package_ocamlpath
+      (s : Rocq_stanza.Theory.t)
+      rocq_modules
+  =
   let loc, name = s.buildable.loc, snd s.name in
   let rule =
     let file_flags =
       (* BUG: We need to pass --rocqlib depending on the boot_type otherwise
          rocqdoc will not work. *)
-      [ theories_flags ~theories_deps
+      [ package_ocamlpath_flags package_ocamlpath
+      ; theories_flags ~theories_deps
       ; A "-R"
       ; Path (Path.build dir)
       ; A (Rocq_lib_name.wrapper (snd s.name))
@@ -1084,6 +1140,7 @@ let setup_rocqdoc_rules ~sctx ~dir ~theories_deps (s : Rocq_stanza.Theory.t) roc
          Command.run_dyn_prog
            ~sandbox:Sandbox_config.needs_sandboxing
            ~dir:(Path.build dir)
+           ~env:(package_runtime_env package_ocamlpath)
            rocq
            (actual_rocq :: file_flags)
          |> Action_builder.With_targets.map
@@ -1107,7 +1164,7 @@ let setup_rocqdoc_rules ~sctx ~dir ~theories_deps (s : Rocq_stanza.Theory.t) roc
 ;;
 
 (* Common context for a theory, deps and rules *)
-let theory_context ~context ~scope (s : Rocq_stanza.Theory.t) =
+let theory_context ~sctx ~dir ~context ~scope (s : Rocq_stanza.Theory.t) =
   let buildable = s.buildable in
   let theory =
     let* rocq_lib_db = Scope.rocq_libs scope in
@@ -1125,13 +1182,13 @@ let theory_context ~context ~scope (s : Rocq_stanza.Theory.t) =
   (* ML-level flags for depending libraries *)
   let package_ocamlpath =
     let lib_db = Scope.libs scope in
-    package_ocamlpath_of_buildable ~context ~theories_deps ~lib_db buildable
+    package_ocamlpath_of_buildable ~sctx ~dir ~context ~theories_deps ~lib_db buildable
   in
   theory, theories_deps, package_ocamlpath
 ;;
 
 (* Common context for extraction, almost the same than above *)
-let extraction_context ~context ~scope (buildable : Rocq_stanza.Buildable.t) =
+let extraction_context ~sctx ~dir ~context ~scope (buildable : Rocq_stanza.Buildable.t) =
   let rocq_lib_db = Scope.rocq_libs scope in
   let theories_deps =
     let* rocq_lib_db = rocq_lib_db in
@@ -1162,7 +1219,7 @@ let extraction_context ~context ~scope (buildable : Rocq_stanza.Buildable.t) =
   in
   let package_ocamlpath =
     let lib_db = Scope.libs scope in
-    package_ocamlpath_of_buildable ~context ~theories_deps ~lib_db buildable
+    package_ocamlpath_of_buildable ~sctx ~dir ~context ~theories_deps ~lib_db buildable
   in
   theories_deps, package_ocamlpath
 ;;
@@ -1172,7 +1229,7 @@ let setup_theory_rules ~sctx ~dir ~dir_contents (s : Rocq_stanza.Theory.t) =
   let rocq_lang_version = s.buildable.rocq_lang_version in
   let theory, theories_deps, package_ocamlpath =
     let context = Super_context.context sctx |> Context.name in
-    theory_context ~context ~scope s
+    theory_context ~sctx ~dir ~context ~scope s
   in
   let wrapper_name = Rocq_lib_name.wrapper (snd s.name) in
   let use_corelib = s.buildable.use_corelib in
@@ -1258,14 +1315,14 @@ let setup_theory_rules ~sctx ~dir ~dir_contents (s : Rocq_stanza.Theory.t) =
           ~rocq_sources:rocq_dir_contents
           rocq_module)
   (* And finally the rocqdoc rules *)
-  >>> setup_rocqdoc_rules ~sctx ~dir ~theories_deps s rocq_modules
+  >>> setup_rocqdoc_rules ~sctx ~dir ~theories_deps ~package_ocamlpath s rocq_modules
 ;;
 
 let rocqtop_args_theory ~sctx ~dir ~dir_contents (s : Rocq_stanza.Theory.t) rocq_module =
   let* scope = Scope.DB.find_by_dir dir in
   let _theory, theories_deps, package_ocamlpath =
     let context = Super_context.context sctx |> Context.name in
-    theory_context ~context ~scope s
+    theory_context ~sctx ~dir ~context ~scope s
   in
   let wrapper_name = Rocq_lib_name.wrapper (snd s.name) in
   let* mode = select_native_mode ~sctx ~dir s.buildable in
@@ -1286,18 +1343,21 @@ let rocqtop_args_theory ~sctx ~dir ~dir_contents (s : Rocq_stanza.Theory.t) rocq
   let boot_flags = Resolve.Memo.read boot_type |> Action_builder.map ~f:Bootstrap.flags in
   let stanza_flags = s.buildable.flags in
   let per_file_flags = None in
-  generic_rocq_args
-    ~sctx
-    ~dir
-    ~wrapper_name
-    ~boot_flags
-    ~per_file_flags
-    ~mode
-    ~rocq_prog:`Rocqtop
-    ~stanza_flags
-    ~theories_deps
-    ~theory_dirs
-    ~package_ocamlpath
+  let+ args =
+    generic_rocq_args
+      ~sctx
+      ~dir
+      ~wrapper_name
+      ~boot_flags
+      ~per_file_flags
+      ~mode
+      ~rocq_prog:`Rocqtop
+      ~stanza_flags
+      ~theories_deps
+      ~theory_dirs
+      ~package_ocamlpath
+  in
+  args, package_runtime_env package_ocamlpath
 ;;
 
 (******************************************************************************)
@@ -1410,7 +1470,7 @@ let setup_extraction_rules ~sctx ~dir ~dir_contents (s : Rocq_stanza.Extraction.
   let* scope = Scope.DB.find_by_dir dir in
   let theories_deps, package_ocamlpath =
     let context = Super_context.context sctx |> Context.name in
-    extraction_context ~context ~scope s.buildable
+    extraction_context ~sctx ~dir ~context ~scope s.buildable
   in
   let source_rule =
     let open Action_builder.O in
@@ -1462,7 +1522,7 @@ let rocqtop_args_extraction ~sctx ~dir (s : Rocq_stanza.Extraction.t) rocq_modul
   let* scope = Scope.DB.find_by_dir dir in
   let theories_deps, package_ocamlpath =
     let context = Super_context.context sctx |> Context.name in
-    extraction_context ~context ~scope s.buildable
+    extraction_context ~sctx ~dir ~context ~scope s.buildable
   in
   let wrapper_name = extraction_wrapper_name s in
   let boot_type =
@@ -1476,18 +1536,21 @@ let rocqtop_args_extraction ~sctx ~dir (s : Rocq_stanza.Extraction.t) rocq_modul
   let boot_flags = Resolve.Memo.read boot_type |> Action_builder.map ~f:Bootstrap.flags in
   let per_file_flags = None in
   let* mode = select_native_mode ~sctx ~dir s.buildable in
-  generic_rocq_args
-    ~sctx
-    ~dir
-    ~wrapper_name
-    ~boot_flags
-    ~per_file_flags
-    ~mode
-    ~rocq_prog:`Rocqtop
-    ~stanza_flags:s.buildable.flags
-    ~theories_deps
-    ~theory_dirs:Path.Build.Set.empty
-    ~package_ocamlpath
+  let+ args =
+    generic_rocq_args
+      ~sctx
+      ~dir
+      ~wrapper_name
+      ~boot_flags
+      ~per_file_flags
+      ~mode
+      ~rocq_prog:`Rocqtop
+      ~stanza_flags:s.buildable.flags
+      ~theories_deps
+      ~theory_dirs:Path.Build.Set.empty
+      ~package_ocamlpath
+  in
+  args, package_runtime_env package_ocamlpath
 ;;
 
 (* Version for export *)

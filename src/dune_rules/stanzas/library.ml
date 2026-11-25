@@ -85,6 +85,7 @@ type t =
   ; enabled_if : Blang.t
   ; instrumentation_backend : (Loc.t * Lib_name.t) option
   ; melange_runtime_deps : Loc.t * Dep_conf.t list
+  ; runtime_deps : Loc.t * Dep_conf.t list
   }
 
 let no_keep_locs =
@@ -226,6 +227,12 @@ let decode =
          (Dune_lang.Syntax.since Dune_lang.Melange.syntax (0, 1)
           >>> located (repeat Dep_conf.decode))
          ~default:(stanza_loc, [])
+     and+ runtime_deps =
+       field
+         "runtime_deps"
+         (Dune_lang.Syntax.since Stanza.syntax (3, 26)
+          >>> located (repeat Dep_conf.decode_runtime))
+         ~default:(stanza_loc, [])
      in
      let wrapped = Wrapped.make ~wrapped ~implements ~special_builtin_support in
      let name =
@@ -318,6 +325,7 @@ let decode =
      ; enabled_if
      ; instrumentation_backend
      ; melange_runtime_deps
+     ; runtime_deps
      })
 ;;
 
@@ -644,6 +652,7 @@ let to_lib_info
     let loc, public_headers = conf.public_headers in
     Lib_info.File_deps.Local (loc, public_headers)
   in
+  let runtime_deps = Some conf.runtime_deps in
   Lib_info.create
     ~loc
     ~path_kind:Local
@@ -686,6 +695,7 @@ let to_lib_info
     ~exit_module
     ~instrumentation_backend
     ~melange_runtime_deps
+    ~runtime_deps
     ~root_module:(Option.map conf.buildable.modules.root_module ~f:snd)
 ;;
 
