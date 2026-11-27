@@ -1065,8 +1065,7 @@ let setup_rocqdoc_rules
     let file_flags =
       (* BUG: We need to pass --rocqlib depending on the boot_type otherwise
          rocqdoc will not work. *)
-      [ package_ocamlpath_flags package_ocamlpath
-      ; theories_flags ~theories_deps
+      [ theories_flags ~theories_deps
       ; A "-R"
       ; Path (Path.build dir)
       ; A (Rocq_lib_name.wrapper (snd s.name))
