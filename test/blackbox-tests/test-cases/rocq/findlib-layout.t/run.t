@@ -46,6 +46,11 @@ Disabled public theories do not contribute files or entries to the META file.
   > EOF
   $ echo 'Definition z := 2.' > C/c.v
 
+Rocqdoc uses the findlib package environment without passing compiler-only
+flags to `rocq doc`.
+
+  $ dune build A/A.html B/B.html
+
   $ dune build @install
   $ find _build/install/default/lib -type l | sort
   _build/install/default/lib/coq/user-contrib/B/b.glob
