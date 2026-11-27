@@ -1554,16 +1554,11 @@ let rocqtop_args_extraction ~sctx ~dir (s : Rocq_stanza.Extraction.t) rocq_modul
 ;;
 
 (* Version for export *)
-let deps_of ~dir ~use_corelib ~wrapper_name ~mode rocq_module =
+let deps_of ~dir ~use_corelib ~rocq_lang_version ~wrapper_name ~mode rocq_module =
   let boot_type =
     let open Memo.O in
     let* scope = Scope.DB.find_by_dir dir in
-    Bootstrap.make
-      ~scope
-      ~use_corelib
-      ~rocq_lang_version:(0, 14)
-      ~wrapper_name
-      rocq_module
+    Bootstrap.make ~scope ~use_corelib ~rocq_lang_version ~wrapper_name rocq_module
   in
   deps_of ~dir ~boot_type ~wrapper_name ~mode rocq_module
 ;;

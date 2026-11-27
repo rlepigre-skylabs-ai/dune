@@ -13,11 +13,12 @@
 
 open Import
 
-(** [deps_of ~dir ~use_corelib ~wrapper_name rocq_module] action that builds the
-    deps of [rocq_module] *)
+(** [deps_of ~dir ~use_corelib ~rocq_lang_version ~wrapper_name rocq_module]
+    action that builds the deps of [rocq_module] *)
 val deps_of
   :  dir:Path.Build.t
   -> use_corelib:bool
+  -> rocq_lang_version:Dune_lang.Syntax.Version.t
   -> wrapper_name:string
   -> mode:Rocq_mode.t
   -> Rocq_module.t
